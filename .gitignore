@@ -1,4 +1,6 @@
 # Project-related
+model
+data
 *.weights
 *.cfg
 *.names
