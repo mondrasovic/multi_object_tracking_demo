@@ -1,3 +1,8 @@
+# Project-related
+*.weights
+*.cfg
+*.names
+
 # PyCharm project directory
 .idea
 
