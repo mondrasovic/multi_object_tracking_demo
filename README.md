@@ -1,2 +1,3 @@
-# multi_object_tracking_demo
+# Multi Object Tracking Demo
+
 Multiple object tracking demonstration.
