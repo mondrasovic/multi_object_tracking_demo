@@ -7,7 +7,7 @@ import abc
 import pathlib
 import dataclasses
 
-from typing import Sequence, Tuple, Any
+from typing import Sequence, Tuple, Any, Dict
 
 import cv2 as cv
 import numpy as np
@@ -34,19 +34,14 @@ class ObjectDetector(abc.ABC):
     def detect(self, image: np.ndarray) -> DetectionResult:
         pass
 
-    @property
-    @abc.abstractmethod
-    def n_classes(self) -> int:
-        pass
-
 
 class VehicleDetector(ObjectDetector):
     VALID_LABELS = ('bicycle', 'car', 'motorbike', 'bus', 'train', 'truck')
     
     def __init__(
             self, config_file_path: str, weights_file_path: str,
-            labels_file_path: str, *, confidence: float = 0.5,
-            threshold: float = 0.5, use_gpu: bool = False) -> None:
+            labels_file_path: str, *, score_thresh: float = 0.5,
+            nms_thresh: float = 0.5, use_gpu: bool = False) -> None:
         self.labels: Sequence[str] = pathlib.Path(
             labels_file_path).read_text().strip().split()
         self.valid_class_ids = set(
@@ -66,12 +61,8 @@ class VehicleDetector(ObjectDetector):
             self._net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
             self._net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA)
         
-        self.confidence: float = confidence
-        self.threshold: float = threshold
-
-    @property
-    def n_classes(self) -> int:
-        return len(self.labels)
+        self.score_thresh: float = score_thresh
+        self.nms_thresh: float = nms_thresh
     
     def detect(self, image: np.ndarray) -> DetectionResult:
         blob = cv.dnn.blobFromImage(
@@ -93,7 +84,7 @@ class VehicleDetector(ObjectDetector):
                     continue
                 
                 score = float(curr_scores[class_id])
-                if score <= self.confidence:
+                if score <= self.score_thresh:
                     continue
                     
                 box = self.scale_frac_box_to_image_size(
@@ -104,7 +95,7 @@ class VehicleDetector(ObjectDetector):
                 class_labels.append(self.labels[class_id])
         
         indices = cv.dnn.NMSBoxes(
-            boxes, scores, self.confidence, self.threshold)
+            boxes, scores, self.score_thresh, self.nms_thresh)
         boxes = self.select_indices_from_nms(boxes, indices)
         scores = self.select_indices_from_nms(scores, indices)
         class_ids = self.select_indices_from_nms(class_ids, indices)
@@ -131,8 +122,9 @@ class VehicleDetector(ObjectDetector):
 
 
 class DetectionVisualizer:
-    def __init__(self, n_classes: int) -> None:
-        self.colors: Sequence[ColorT] = [(0, 255, 0)] * n_classes
+    def __init__(self, class_ids: Sequence[int]) -> None:
+        self.colors: Dict[int, ColorT] = {
+            class_id: (0, 255, 0) for class_id in class_ids}
     
     def draw_detections(
             self, image: np.ndarray, detections: DetectionResult) -> None:

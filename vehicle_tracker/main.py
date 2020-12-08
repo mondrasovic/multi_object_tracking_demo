@@ -7,10 +7,8 @@ import click
 
 import cv2 as cv
 
-from detection import VehicleDetector, DetectionVisualizer, DetectionResult
+from detection import VehicleDetector, DetectionVisualizer
 
-
-# TODO score_thresh, nms_thresh
 
 @click.command()
 @click.argument('config_file_path')
@@ -20,17 +18,22 @@ from detection import VehicleDetector, DetectionVisualizer, DetectionResult
     '--input-file-path', '-i', default='',
     help='input file name (if empty, default camera is used)')
 @click.option(
-    '--confidence', '-c', default=0.5, type=float, help='detection confidence')
+    '--score-thresh', '-s', default=0.5, type=float,
+    help='detection score (confidence) threshold')
+@click.option(
+    '--nms-thresh', '-s', default=0.5, type=float,
+    help='Non-Maximum Suppression threshold')
 @click.option(
     '--use-gpu', '-g', default=False, is_flag=True,
     help='whether to use GPU or not')
 def main(
         config_file_path: str, weights_file_path: str, labels_file_path: str,
-        input_file_path: str, confidence: float, use_gpu: bool) -> int:
+        input_file_path: str, score_thresh: float, nms_thresh: float,
+        use_gpu: bool) -> int:
     detector = VehicleDetector(
         config_file_path, weights_file_path, labels_file_path,
-        confidence=confidence, use_gpu=use_gpu)
-    detection_visualizer = DetectionVisualizer(detector.n_classes)
+        score_thresh=score_thresh, nms_thresh=nms_thresh, use_gpu=use_gpu)
+    detection_visualizer = DetectionVisualizer(detector.valid_class_ids)
     
     if input_file_path:
         capture = cv.VideoCapture(input_file_path)
