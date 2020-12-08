@@ -4,9 +4,18 @@
 
 ## Setup
 
+Download **model weights**:
 ```
 wget https://pjreddie.com/media/files/yolov3.weights
+```
+
+Download **model configuration**:
+```
 wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg
+```
+
+Download **MS COCO** dataset **class labels**:
+```
 wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
 ```
 

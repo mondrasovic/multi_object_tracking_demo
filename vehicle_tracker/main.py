@@ -7,7 +7,9 @@ import click
 
 import cv2 as cv
 
-from detection import VehicleDetector, DetectionVisualizer
+from detection import VehicleDetector
+from tracking import TrackingByDetectionMultiTracker
+from visual import DetectionVisualizer, TrackingVisualizer
 
 
 @click.command()
@@ -33,7 +35,10 @@ def main(
     detector = VehicleDetector(
         config_file_path, weights_file_path, labels_file_path,
         score_thresh=score_thresh, nms_thresh=nms_thresh, use_gpu=use_gpu)
+    tracker = TrackingByDetectionMultiTracker()
+    
     detection_visualizer = DetectionVisualizer(detector.valid_class_ids)
+    tracking_visualizer = TrackingVisualizer()
     
     if input_file_path:
         capture = cv.VideoCapture(input_file_path)
@@ -46,9 +51,13 @@ def main(
             break
         
         detections = detector.detect(image)
+        tracks = tracker.track(image, detections)
+        
         detection_visualizer.draw_detections(image, detections)
+        tracking_visualizer.draw_tracks(image, tracks)
+        
         cv.imshow('Detections preview', image)
-        key = cv.waitKey(10) & 0xff
+        key = cv.waitKey(0) & 0xff
         if key == ord('q'):
             break
     
