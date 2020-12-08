@@ -7,105 +7,23 @@ import abc
 import pathlib
 import dataclasses
 
-from typing import Sequence, Tuple, Any, Dict, Iterator
+from typing import Sequence, Tuple, Any, Dict
 
 import cv2 as cv
 import numpy as np
+
+from bbox import BBox
 
 
 ColorT = Tuple[int, int, int]
 
 
-class BBox:
-    """
-    Bounding box with integer coordinates in a 2D image.
-    """
-
-    def __init__(self, x: int, y: int, width: int, height: int) -> None:
-        """
-        :param x: x coordinate
-        :param y: y coordinate
-        :param width: a positive width
-        :param height: a positive height
-        """
-        assert (width > 0) and (height > 0)
-
-        self.x, self.y, self.width, self.height = x, y, width, height
-
-        self._center = (self.x + int(round(self.width / 2)),
-                        self.y + int(round(self.height / 2)))
-
-    def __iter__(self) -> Iterator[int]:
-        return iter((self.x, self.y, self.width, self.height))
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, BBox) and \
-               ((self.x == other.x) and (self.y == other.y) and
-                (self.width == other.width) and (self.height == other.height))
-
-    def __hash__(self) -> int:
-        return hash((self.x, self.y, self.width, self.height))
-
-    def __repr__(self) -> str:
-        return f'BBox({self.x},{self.y},{self.width},{self.height})'
-
-    @property
-    def top_left(self) -> Tuple[int, int]:
-        return self.x, self.y
-
-    @property
-    def top_right(self) -> Tuple[int, int]:
-        return self.x + self.width, self.y
-
-    @property
-    def bottom_left(self) -> Tuple[int, int]:
-        return self.x, self.y + self.height
-
-    @property
-    def bottom_right(self) -> Tuple[int, int]:
-        return self.x + self.width, self.y + self.height
-    
-    def area(self) -> int:
-        return self.width * self.height
-    
-    def intersection_bbox(self, other: 'BBox') -> 'BBox':
-        top_left_x = max(self.x, other.x)
-        top_left_y = max(self.y, other.y)
-        bottom_right_x = min(self.x + self.width, other.x + other.width)
-        bottom_right_y = min(self.y + self.height, other.y + other.height)
-
-        width = bottom_right_x - top_left_x + 1
-        height = bottom_right_y - top_left_y + 1
-
-        if min(width, height) <= 0:
-            raise ValueError('bounding boxes have no intersection')
-
-        return BBox(top_left_x, top_left_y, width, height)
-
-    def intersection_area(self, other: 'BBox') -> int:
-        a = (min(self.x + self.width, other.x + other.width) -
-             max(self.x, other.x) + 1)
-        b = (min(self.y + self.height, other.y + other.height) -
-             max(self.y, other.y) + 1)
-
-        return max(0, a) * max(0, b)
-
-    def intersection_over_union(self, other: 'BBox') -> float:
-        intersection_area = self.intersection_area(other)
-        union_area = (self.area() + other.area()) - intersection_area
-        return intersection_area / float(union_area)
-
-
 @dataclasses.dataclass(frozen=True)
 class DetectionResult:
-    boxes: Sequence[BBox]
-    scores: Sequence[float]
-    class_ids: Sequence[int]
-    class_labels: Sequence[str]
-    
-    def __iter__(self):
-        return iter(
-            zip(self.boxes, self.scores, self.class_ids, self.class_labels))
+    box: BBox
+    score: float
+    class_id: int
+    class_label: str
 
 
 class ObjectDetector(abc.ABC):
@@ -143,7 +61,7 @@ class VehicleDetector(ObjectDetector):
         self.score_thresh: float = score_thresh
         self.nms_thresh: float = nms_thresh
     
-    def detect(self, image: np.ndarray) -> DetectionResult:
+    def detect(self, image: np.ndarray) -> Sequence[DetectionResult]:
         blob = cv.dnn.blobFromImage(
             image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
         self._net.setInput(blob)
@@ -152,7 +70,8 @@ class VehicleDetector(ObjectDetector):
         return self._extract_prediction_data(outputs, width, height)
     
     def _extract_prediction_data(
-            self, outputs, width: int, height: int) -> DetectionResult:
+            self, outputs, width: int,
+            height: int) -> Sequence[DetectionResult]:
         boxes, scores, class_ids, class_labels = [], [], [], []
         
         for output in outputs:
@@ -176,13 +95,17 @@ class VehicleDetector(ObjectDetector):
         indices = cv.dnn.NMSBoxes(
             boxes, scores, self.score_thresh, self.nms_thresh).reshape(-1)
         
-        boxes = [BBox(*box)
-                 for box in self.select_indices_from_nms(boxes, indices)]
+        boxes = self.select_indices_from_nms(boxes, indices)
         scores = self.select_indices_from_nms(scores, indices)
         class_ids = self.select_indices_from_nms(class_ids, indices)
         class_labels = self.select_indices_from_nms(class_labels, indices)
         
-        return DetectionResult(boxes, scores, class_ids, class_labels)
+        detection_results = [
+            DetectionResult(BBox(*box), score, class_id, class_label)
+            for box, score, class_id, class_label in
+            zip(boxes, scores, class_ids, class_labels)]
+        
+        return detection_results
     
     @staticmethod
     def scale_frac_box_to_image_size(
@@ -208,15 +131,16 @@ class DetectionVisualizer:
             class_id: (0, 255, 0) for class_id in class_ids}
     
     def draw_detections(
-            self, image: np.ndarray, detections: DetectionResult) -> None:
-        for bbox, score, class_id, class_label in detections:
-            color = tuple(self.colors[class_id])
-            top_left = bbox.top_left
+            self, image: np.ndarray,
+            detections: Sequence[DetectionResult]) -> None:
+        for detection in detections:
+            color = tuple(self.colors[detection.class_id])
+            top_left = detection.box.top_left
             cv.rectangle(
-                image, top_left, bbox.bottom_right, color=color,
+                image, top_left, detection.box.bottom_right, color=color,
                 thickness=3, lineType=cv.LINE_AA)
             
-            text = f'{class_label}: {score:.4f}'
+            text = f'{detection.class_label}: {detection.score:.4f}'
             cv.putText(
                 image, text, (top_left[0], top_left[1] - 5),
                 fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=color,
