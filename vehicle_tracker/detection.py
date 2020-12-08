@@ -89,6 +89,9 @@ class VehicleDetector(ObjectDetector):
                 class_ids.append(class_id)
                 class_labels.append(self.labels[class_id])
         
+        if not boxes:
+            return []
+        
         indices = cv.dnn.NMSBoxes(
             boxes, scores, self.score_thresh, self.nms_thresh).reshape(-1)
         

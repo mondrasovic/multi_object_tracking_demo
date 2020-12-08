@@ -5,7 +5,7 @@
 
 import dataclasses
 
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Dict
 
 import cv2 as cv
 import numpy as np
@@ -22,7 +22,7 @@ class TrackingResult:
 
 class TrackingByDetectionMultiTracker:
     def __init__(self):
-        self._trackers = []
+        self._trackers: Dict[int, cv.Tracker] = {}
         self._track_id = 0
     
     def track(
@@ -31,18 +31,32 @@ class TrackingByDetectionMultiTracker:
         tracking_results = []
         
         if self._trackers:
-            cost_matrix = []
-            
-            for tracker, track_id in self._trackers:
+            failed_track_ids = []
+            for track_id, tracker in self._trackers.items():
                 ret, box = tracker.update(image)
-                box = tuple(int(round(c)) for c in box)
-                tracking_result = TrackingResult(BBox(*box), track_id)
-                tracking_results.append(tracking_result)
+                if not ret:
+                    failed_track_ids.append(track_id)
+                else:
+                    box = tuple(int(round(c)) for c in box)
+                    tracking_result = TrackingResult(BBox(*box), track_id)
+                    tracking_results.append(tracking_result)
+            
+            for track_id in failed_track_ids:
+                del self._trackers[track_id]
+            
+            if tracking_results:
+                cost_matrix = []
+                
+                for detection in detections:
+                    cost_matrix.append(
+                        [1 - detection.box.intersection_over_union(track.box)
+                         for track in tracking_results])
+            
+                cost_matrix = np.array(cost_matrix)
         else:
             for detection in detections:
-                tracker_data = self._create_tracker()
-                tracker, track_id = tracker_data
-                self._trackers.append(tracker_data)
+                tracker, track_id = self._create_tracker()
+                self._trackers[track_id] = tracker
                 tracker.init(image, tuple(detection.box))
                 tracking_result = TrackingResult(detection.box, track_id)
                 tracking_results.append(tracking_result)
