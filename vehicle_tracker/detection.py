@@ -41,12 +41,19 @@ class ObjectDetector(abc.ABC):
 
 
 class VehicleDetector(ObjectDetector):
+    VALID_LABELS = ('bicycle', 'car', 'motorbike', 'bus', 'train', 'truck')
+    
     def __init__(
             self, config_file_path: str, weights_file_path: str,
             labels_file_path: str, *, confidence: float = 0.5,
             threshold: float = 0.5, use_gpu: bool = False) -> None:
         self.labels: Sequence[str] = pathlib.Path(
             labels_file_path).read_text().strip().split()
+        self.valid_class_ids = set(
+            i
+            for i, label in enumerate(self.labels)
+            if label in self.VALID_LABELS)
+        
         self._net = cv.dnn.readNetFromDarknet(
             config_file_path, weights_file_path)
     
@@ -82,15 +89,19 @@ class VehicleDetector(ObjectDetector):
             for detection in output:
                 curr_scores = detection[5:]
                 class_id = int(np.argmax(curr_scores))
-                score = float(curr_scores[class_id])
+                if class_id not in self.valid_class_ids:
+                    continue
                 
-                if score > self.confidence:
-                    box = self.scale_frac_box_to_image_size(
-                        detection[0:4], width, height)
-                    boxes.append(self.box_center_to_top_left(box))
-                    scores.append(score)
-                    class_ids.append(class_id)
-                    class_labels.append(self.labels[class_id])
+                score = float(curr_scores[class_id])
+                if score <= self.confidence:
+                    continue
+                    
+                box = self.scale_frac_box_to_image_size(
+                    detection[0:4], width, height)
+                boxes.append(self.box_center_to_top_left(box))
+                scores.append(score)
+                class_ids.append(class_id)
+                class_labels.append(self.labels[class_id])
         
         indices = cv.dnn.NMSBoxes(
             boxes, scores, self.confidence, self.threshold)
