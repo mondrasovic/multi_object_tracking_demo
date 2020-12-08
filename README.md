@@ -22,4 +22,5 @@ wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
 ## References
 
 [OpenCV Yolo Tutorial 1](https://gilberttanner.com/blog/yolo-object-detection-with-opencv)
+
 [OpenCV Yolo Tutorial 2](https://www.pyimagesearch.com/2018/11/12/yolo-object-detection-with-opencv/)
