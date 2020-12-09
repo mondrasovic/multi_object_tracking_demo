@@ -53,7 +53,7 @@ def main(
         detections = detector.detect(image)
         tracks = tracker.track(image, detections)
         
-        detection_visualizer.draw_detections(image, detections)
+        # detection_visualizer.draw_detections(image, detections)
         tracking_visualizer.draw_tracks(image, tracks)
         
         cv.imshow('Detections preview', image)
