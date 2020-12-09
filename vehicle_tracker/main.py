@@ -57,7 +57,7 @@ def main(
         tracking_visualizer.draw_tracks(image, tracks)
         
         cv.imshow('Detections preview', image)
-        key = cv.waitKey(1) & 0xff
+        key = cv.waitKey(0) & 0xff
         if key == ord('q'):
             break
     
