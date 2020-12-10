@@ -8,6 +8,8 @@ import click
 import cv2 as cv
 import numpy as np
 
+import skvideo.io
+
 from detection import VehicleDetector
 from tracking import TrackingByDetectionMultiTracker
 from visual import DetectionVisualizer, TrackingVisualizer
@@ -51,6 +53,10 @@ def main(
     else:
         capture = cv.VideoCapture(0)
     
+    frame_rate = 25
+    output_video_file_path = '../video_output.mp4'
+    video_writer = skvideo.io.FFmpegWriter(
+        output_video_file_path, outputdict={'-r': str(frame_rate)})
     while capture.isOpened():
         ret, image = capture.read()
         if not ret:
@@ -64,8 +70,10 @@ def main(
         tracking_visualizer.draw_tracks(image, tracks)
         
         cv.imshow('Detections preview', image)
+        video_writer.writeFrame(cv.cvtColor(image, cv.COLOR_BGR2RGB))
         key = cv.waitKey(1) & 0xff
         if key == ord('q'):
+            video_writer.close()
             break
     
     capture.release()

@@ -35,7 +35,7 @@ class VehicleDetector(ObjectDetector):
     def __init__(
             self, config_file_path: str, weights_file_path: str,
             labels_file_path: str, *, score_thresh: float = 0.5,
-            nms_thresh: float = 0.5, use_gpu: bool = False) -> None:
+            nms_thresh: float = 0.3, use_gpu: bool = False) -> None:
         self.labels: Sequence[str] = pathlib.Path(
             labels_file_path).read_text().strip().split()
         self.valid_class_ids = set(
@@ -81,7 +81,8 @@ class VehicleDetector(ObjectDetector):
                 score = float(curr_scores[class_id])
                 if score <= self.score_thresh:
                     continue
-                    
+
+                # TODO Make this an optional parameter.
                 box = self.scale_frac_box_to_image_size(
                     detection[0:4], width, height)
                 area_ratio = (box[2] * box[3]) / float(width * height)

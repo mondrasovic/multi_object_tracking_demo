@@ -67,7 +67,7 @@ class TrackingVisualizer:
     def draw_tracks(
             self, image: np.ndarray, tracks: Sequence[TrackedDetection]) -> None:
         for track in tracks:
-            text = f'#{track.track_id}'
+            text = f'{track.track_id}'
             labeled_rectangle(
                 image, track.box.top_left, track.box.bottom_right, text,
                 (172, 180, 90), (245, 245, 245))

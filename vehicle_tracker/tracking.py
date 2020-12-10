@@ -36,6 +36,12 @@ class ObjectTemplate:
     @staticmethod
     def extract_resized_roi(image: np.ndarray, box: BBox) -> np.ndarray:
         (x1, y1), (x2, y2) = box.top_left, box.bottom_right
+        
+        x1 = np.clip(x1, 0, image.shape[1] - 1)
+        y1 = np.clip(y1, 0, image.shape[0] - 1)
+        x2 = np.clip(x2, 0, image.shape[1] - 1)
+        y2 = np.clip(y2, 0, image.shape[0] - 1)
+        
         roi = image[y1:y2, x1:x2]
         roi = cv.resize(
             roi, ObjectTemplate.TEMPLATE_SIZE, interpolation=cv.INTER_AREA)
@@ -43,7 +49,7 @@ class ObjectTemplate:
 
 
 class Track:
-    _track_id = 0
+    _track_id = 1
     
     def __init__(self, id_: int, image: np.ndarray, box: BBox) -> None:
         self._id: int = id_
@@ -85,7 +91,7 @@ CostEvalT = Callable[[Detection, Track], float]
 class TrackingByDetectionMultiTracker:
     def __init__(
             self, iou_dist_thresh: float = 0.7,
-            template_dist_thresh: float = 0.1, max_no_update_count: int = 20):
+            template_dist_thresh: float = 0.08, max_no_update_count: int = 20):
         assert 0 <= iou_dist_thresh <= 1
         assert 0 <= template_dist_thresh <= 1
         assert max_no_update_count > 0
@@ -146,7 +152,6 @@ class TrackingByDetectionMultiTracker:
             if tracks:
                 cost_matrix = np.array(cost_matrix)
                 row_ind, col_ind = optimize.linear_sum_assignment(cost_matrix)
-                print(f'{cost_matrix}')
             
             assignment_pos = 0
             for cost_matrix_row, detection in enumerate(detections):
