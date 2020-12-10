@@ -13,7 +13,7 @@ import numpy as np
 from scipy import optimize
 
 from bbox import BBox
-from detection import DetectionResult
+from detection import Detection
 
 
 # @dataclasses.dataclass(frozen=True)

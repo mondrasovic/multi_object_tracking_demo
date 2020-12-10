@@ -8,8 +8,8 @@ from typing import Sequence, Tuple, Dict
 import cv2 as cv
 import numpy as np
 
-from detection import DetectionResult
-from tracking import TrackingResult
+from detection import Detection
+from tracking import TrackedDetection
 
 ColorT = Tuple[int, int, int]
 PointT = Tuple[int, int]
@@ -48,7 +48,7 @@ class DetectionVisualizer:
     
     def draw_detections(
             self, image: np.ndarray,
-            detections: Sequence[DetectionResult]) -> None:
+            detections: Sequence[Detection]) -> None:
         for detection in detections:
             color = tuple(self.colors[detection.class_id])
             top_left = detection.box.top_left
@@ -65,7 +65,7 @@ class DetectionVisualizer:
 
 class TrackingVisualizer:
     def draw_tracks(
-            self, image: np.ndarray, tracks: Sequence[TrackingResult]) -> None:
+            self, image: np.ndarray, tracks: Sequence[TrackedDetection]) -> None:
         for track in tracks:
             text = f'Track ID: {track.track_id}'
             labeled_rectangle(

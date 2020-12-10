@@ -16,7 +16,7 @@ from bbox import BBox
 
 
 @dataclasses.dataclass(frozen=True)
-class DetectionResult:
+class Detection:
     box: BBox
     score: float
     class_id: int
@@ -25,7 +25,7 @@ class DetectionResult:
 
 class ObjectDetector(abc.ABC):
     @abc.abstractmethod
-    def detect(self, image: np.ndarray) -> DetectionResult:
+    def detect(self, image: np.ndarray) -> Detection:
         pass
 
 
@@ -58,7 +58,7 @@ class VehicleDetector(ObjectDetector):
         self.score_thresh: float = score_thresh
         self.nms_thresh: float = nms_thresh
     
-    def detect(self, image: np.ndarray) -> Sequence[DetectionResult]:
+    def detect(self, image: np.ndarray) -> Sequence[Detection]:
         blob = cv.dnn.blobFromImage(
             image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
         self._net.setInput(blob)
@@ -68,7 +68,7 @@ class VehicleDetector(ObjectDetector):
     
     def _extract_prediction_data(
             self, outputs, width: int,
-            height: int) -> Sequence[DetectionResult]:
+            height: int) -> Sequence[Detection]:
         boxes, scores, class_ids, class_labels = [], [], [], []
         
         for output in outputs:
@@ -101,7 +101,7 @@ class VehicleDetector(ObjectDetector):
         class_labels = self.select_indices_from_nms(class_labels, indices)
         
         detection_results = [
-            DetectionResult(BBox(*box), score, class_id, class_label)
+            Detection(BBox(*box), score, class_id, class_label)
             for box, score, class_id, class_label in
             zip(boxes, scores, class_ids, class_labels)]
         

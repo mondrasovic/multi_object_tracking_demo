@@ -5,7 +5,7 @@
 
 import dataclasses
 
-from typing import Sequence, Tuple, Dict, List, Callable
+from typing import Sequence, Tuple, Dict, Callable, List
 
 import cv2 as cv
 import numpy as np
@@ -14,7 +14,7 @@ from scipy import optimize
 from scipy.spatial import distance
 
 from bbox import BBox
-from detection import DetectionResult
+from detection import Detection
 
 
 class ObjectTemplate:
@@ -29,14 +29,14 @@ class ObjectTemplate:
         self.template = (self.template * (1 - self.UPDATE_DECAY) +
                          roi * self.UPDATE_DECAY)
     
-    def calc_distance(self, other: 'ObjectTemplate') -> float:
+    def calc_dist(self, other: 'ObjectTemplate') -> float:
         return distance.cosine(
             self.template.flatten(), other.template.flatten())
     
     @staticmethod
     def extract_resized_roi(image: np.ndarray, box: BBox) -> np.ndarray:
         (x1, y1), (x2, y2) = box.top_left, box.bottom_right
-        roi =  image[y1:y2, x1:x2]
+        roi = image[y1:y2, x1:x2]
         roi = cv.resize(
             roi, ObjectTemplate.TEMPLATE_SIZE, interpolation=cv.INTER_AREA)
         return roi.astype(np.float)
@@ -49,6 +49,7 @@ class Track:
         self._id: int = id_
         self.box: BBox = box
         self.template = ObjectTemplate(image, box)
+        self.no_update_count = 0
     
     @staticmethod
     def build(image: np.ndarray, box: BBox) -> 'Track':
@@ -63,93 +64,131 @@ class Track:
     def update(self, image: np.ndarray, box: BBox) -> None:
         self.box = box
         self.template.update(image, box)
+        self.no_update_count = 0
+    
+    def notify_no_update(self) -> None:
+        self.no_update_count += 1
 
 
 @dataclasses.dataclass(frozen=True)
-class TrackingResult:
+class TrackedDetection:
     box: BBox
     track_id: int
 
 
-DetectionsT = Sequence[DetectionResult]
+DetectionsT = Sequence[Detection]
+TrackedDetectionsT = List[TrackedDetection]
 TracksT = Sequence[Track]
+CostEvalT = Callable[[Detection, Track], float]
 
 
 class TrackingByDetectionMultiTracker:
-    def __init__(self):
+    def __init__(
+            self, iou_dist_thresh: float = 0.7,
+            template_dist_thresh: float = 0.5, max_no_update_count: int = 20):
+        assert 0 <= iou_dist_thresh <= 1
+        assert 0 <= template_dist_thresh <= 1
+        assert max_no_update_count > 0
+        
+        self.iou_dist_thresh: float = iou_dist_thresh
+        self.template_dist_thresh: float = template_dist_thresh
+        self.max_no_update_count: int = max_no_update_count
+        
         self._tracks: Dict[int, Track] = {}
     
     def track(
             self, image: np.ndarray,
-            detections: DetectionsT) -> Sequence[TrackingResult]:
-        tracking_results = []
-        cost_matrix = []
+            detections: DetectionsT) -> TrackedDetectionsT:
+        tracked_detections = []
         
-        # The abstraction is possible. There are two rounds basically.
-        # In the first round, compute the cost matrix using IoU metric. Then,
-        # given some threshold, assign detections to tracks. And collect
-        # unassigned ones. Once you have another two lists, then run the whole
-        # round again but this time use the template distance. This way you
-        # could perform all those checks only in one place.
-        # TODO Use IoU distance for better interpretability.
-        tracks = tuple(self._tracks.values())
-        for detection in detections:
-            cost_matrix.append(
-                [detection.box.intersection_over_union(track.box)
-                 for track in tracks])
+        # First round. Assign detections according to the IoU distance.
+        rem_detections, rem_tracks = self._assign_detections_to_tracks(
+            image, detections, tuple(self._tracks.values()), tracked_detections,
+            self._iou_dist, self.iou_dist_thresh)
         
-        row_ind, col_ind = [], []
-        if detections and self._tracks:
-            cost_matrix = np.array(cost_matrix)
-            row_ind, col_ind = optimize.linear_sum_assignment(-cost_matrix)
-            print('*' * 50)
-            print(cost_matrix)
+        # Second round. Assign detections according to the distance of
+        # visual features.
+        rem_detections, rem_tracks = self._assign_detections_to_tracks(
+            image, rem_detections, rem_tracks, tracked_detections,
+            self._template_cosine_dist(image, detections),
+            self.template_dist_thresh)
         
-        row_ind = list(row_ind)
-        col_ind = list(col_ind)
+        # Mark the remaining tracks as not updated. If no update has been
+        # present in a specified number of iterations, then remove the track.
+        for track in rem_tracks:
+            track.notify_no_update()
+            if track.no_update_count >= self.max_no_update_count:
+                del self._tracks[track.id]
         
-        min_iou_thresh = 0.3
-        unassigned_detections = []
-        
-        for i, detection in enumerate(detections):
-            if i in row_ind:
-                box = detections[i].box
-                track_pos = col_ind[row_ind.index(i)]
-                track = tracks[track_pos]
-                if box.intersection_over_union(track.box) > min_iou_thresh:
-                    # track.box = box
-                    track.update(image, box)
-                    tracking_results.append(TrackingResult(box, track.id))
-                    continue
-            unassigned_detections.append(detection)
-
-        # unassigned_track_ids = (
-        #     track.id for i, track in enumerate(tracks) if i not in col_ind)
-        #
-        # cost_matrix = []
-        # for detection in unassigned_detections:
-        #     detection_template = ObjectTemplate(image, detection.box)
-        #     for i, track in enumerate(tracks):
-        #         distances = []
-        #         if i not in col_ind:
-        #             distances.append(
-        #                 detection_template.calc_distance(track.template))
-        
-        for detection in unassigned_detections:
+        # The remaining detections will be assigned to new tracks.
+        for detection in rem_detections:
             track = self._create_track(image, detection.box)
-            tracking_results.append(TrackingResult(detection.box, track.id))
+            tracked_detections.append(TrackedDetection(detection.box, track.id))
         
-        unassigned_track_ids = (
-            track.id for i, track in enumerate(tracks) if i not in col_ind)
-        for track_id in unassigned_track_ids:
-            del self._tracks[track_id]
-        
-        return tracking_results
+        return tracked_detections
     
+    @staticmethod
     def _assign_detections_to_tracks(
-            self, detections: DetectionsT,
-            tracks: TracksT, cost_eval, thresh) -> Tuple[DetectionsT, TracksT]:
-        pass
+            image: np.ndarray, detections: DetectionsT,
+            tracks: TracksT, tracked_detections: TrackedDetectionsT,
+            cost_eval: CostEvalT, thresh: float) -> Tuple[DetectionsT, TracksT]:
+        rem_detections = []
+        assigned_tracks_pos = set()
+        
+        if detections:
+            cost_matrix = []
+            
+            for detection in detections:
+                cost_matrix.append(
+                    [cost_eval(detection, track) for track in tracks])
+            
+            row_ind = col_ind = []
+            if tracks:
+                cost_matrix = np.array(cost_matrix)
+                row_ind, col_ind = optimize.linear_sum_assignment(cost_matrix)
+            
+            assignment_pos = 0
+            for cost_matrix_row, detection in enumerate(detections):
+                if assignment_pos < len(row_ind):
+                    assigned_row = row_ind[assignment_pos]
+                    
+                    if cost_matrix_row == assigned_row:
+                        assigned_col = col_ind[assignment_pos]
+                        cost = cost_matrix[assigned_row, assigned_col]
+                        
+                        if cost < thresh:
+                            box = detections[assigned_row].box
+                            track = tracks[assigned_col]
+                            
+                            track.update(image, box)
+                            assigned_tracks_pos.add(assigned_col)
+                            tracked_detections.append(
+                                TrackedDetection(box, track.id))
+                            assignment_pos += 1
+                            
+                            continue
+                rem_detections.append(detection)
+        
+        rem_tracks_pos = set(range(len(tracks))) - assigned_tracks_pos
+        rem_tracks = [tracks[i] for i in rem_tracks_pos]
+        
+        return rem_detections, rem_tracks
+    
+    @staticmethod
+    def _iou_dist(detection: Detection, track: Track) -> float:
+        return 1 - detection.box.intersection_over_union(track.box)
+    
+    @staticmethod
+    def _template_cosine_dist(
+            image: np.ndarray, detections: DetectionsT) -> CostEvalT:
+        templates_cache = {
+            detection: ObjectTemplate(image, detection.box)
+            for detection in detections}
+        
+        def _cost_eval(detection: Detection, track: Track) -> float:
+            return templates_cache[detection].calc_dist(track.template)
+        
+        return _cost_eval
     
     def _create_track(self, image: np.ndarray, box: BBox) -> Track:
         track = Track.build(image, box)
