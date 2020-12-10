@@ -16,7 +16,7 @@ from visual import DetectionVisualizer, TrackingVisualizer
 
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
-    image = cv.flip(cv.flip(image, 1), 0)
+    # image = cv.flip(cv.flip(image, 1), 0)
     return cv.resize(image, None, fx=0.6, fy=0.6)
 
 
