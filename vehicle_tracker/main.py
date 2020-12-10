@@ -6,10 +6,16 @@
 import click
 
 import cv2 as cv
+import numpy as np
 
 from detection import VehicleDetector
 from tracking import TrackingByDetectionMultiTracker
 from visual import DetectionVisualizer, TrackingVisualizer
+
+
+def preprocess_image(image: np.ndarray) -> np.ndarray:
+    image = cv.flip(cv.flip(image, 1), 0)
+    return cv.resize(image, None, fx=0.6, fy=0.6)
 
 
 @click.command()
@@ -50,6 +56,7 @@ def main(
         if not ret:
             break
         
+        image = preprocess_image(image)
         detections = detector.detect(image)
         tracks = tracker.track(image, detections)
         
@@ -57,7 +64,7 @@ def main(
         tracking_visualizer.draw_tracks(image, tracks)
         
         cv.imshow('Detections preview', image)
-        key = cv.waitKey(0) & 0xff
+        key = cv.waitKey(1) & 0xff
         if key == ord('q'):
             break
     

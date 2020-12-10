@@ -84,6 +84,10 @@ class VehicleDetector(ObjectDetector):
                     
                 box = self.scale_frac_box_to_image_size(
                     detection[0:4], width, height)
+                area_ratio = (box[2] * box[3]) / float(width * height)
+                if area_ratio < 0.002:
+                    continue
+                
                 boxes.append(self.box_center_to_top_left(box))
                 scores.append(score)
                 class_ids.append(class_id)

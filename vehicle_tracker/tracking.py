@@ -18,7 +18,7 @@ from detection import Detection
 
 
 class ObjectTemplate:
-    TEMPLATE_SIZE = (32, 32)
+    TEMPLATE_SIZE = (64, 64)
     UPDATE_DECAY = 0.7
     
     def __init__(self, image: np.ndarray, box: BBox) -> None:
@@ -85,7 +85,7 @@ CostEvalT = Callable[[Detection, Track], float]
 class TrackingByDetectionMultiTracker:
     def __init__(
             self, iou_dist_thresh: float = 0.7,
-            template_dist_thresh: float = 0.5, max_no_update_count: int = 20):
+            template_dist_thresh: float = 0.1, max_no_update_count: int = 20):
         assert 0 <= iou_dist_thresh <= 1
         assert 0 <= template_dist_thresh <= 1
         assert max_no_update_count > 0
@@ -146,6 +146,7 @@ class TrackingByDetectionMultiTracker:
             if tracks:
                 cost_matrix = np.array(cost_matrix)
                 row_ind, col_ind = optimize.linear_sum_assignment(cost_matrix)
+                print(f'{cost_matrix}')
             
             assignment_pos = 0
             for cost_matrix_row, detection in enumerate(detections):
