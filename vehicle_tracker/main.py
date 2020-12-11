@@ -17,7 +17,11 @@ from visual import TrackingVisualizer
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
     # image = cv.flip(cv.flip(image, 1), 0)
+<<<<<<< HEAD
     return cv.resize(image, None, fx=0.8, fy=0.8)
+=======
+    return cv.resize(image, None, fx=0.6, fy=0.6)
+>>>>>>> b224d369b2d4179818f4bf32c250031adc2d92a7
 
 
 @click.command()
