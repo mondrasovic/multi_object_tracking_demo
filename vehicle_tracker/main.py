@@ -12,12 +12,12 @@ import skvideo.io
 
 from detection import VehicleDetector
 from tracking import TrackingByDetectionMultiTracker
-from visual import DetectionVisualizer, TrackingVisualizer
+from visual import TrackingVisualizer
 
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
-    image = cv.flip(cv.flip(image, 1), 0)
-    return cv.resize(image, None, fx=0.6, fy=0.6)
+    # image = cv.flip(cv.flip(image, 1), 0)
+    return cv.resize(image, None, fx=0.8, fy=0.8)
 
 
 @click.command()
@@ -31,7 +31,7 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
     '--score-thresh', '-s', default=0.5, type=float,
     help='detection score (confidence) threshold')
 @click.option(
-    '--nms-thresh', '-s', default=0.5, type=float,
+    '--nms-thresh', '-n', default=0.3, type=float,
     help='Non-Maximum Suppression threshold')
 @click.option(
     '--use-gpu', '-g', default=False, is_flag=True,
@@ -45,7 +45,6 @@ def main(
         score_thresh=score_thresh, nms_thresh=nms_thresh, use_gpu=use_gpu)
     tracker = TrackingByDetectionMultiTracker()
     
-    detection_visualizer = DetectionVisualizer(detector.valid_class_ids)
     tracking_visualizer = TrackingVisualizer()
     
     if input_file_path:
@@ -65,8 +64,6 @@ def main(
         image = preprocess_image(image)
         detections = detector.detect(image)
         tracks = tracker.track(image, detections)
-        
-        # detection_visualizer.draw_detections(image, detections)
         tracking_visualizer.draw_tracks(image, tracks)
         
         cv.imshow('Detections preview', image)

@@ -9,12 +9,57 @@ from typing import Sequence, Tuple, Dict, Callable, List
 
 import cv2 as cv
 import numpy as np
-
 from scipy import optimize
 from scipy.spatial import distance
 
 from bbox import BBox
 from detection import Detection
+
+
+# class VelocityModel:
+#     def __init__(self, position: np.ndarray, friction: float = 0.7) -> None:
+#         assert 0 <= friction <= 1
+#
+#         self.position: np.ndarray = position.copy()
+#         self.velocity: np.ndarray = np.array([0, 0])
+#         self.friction: float = friction
+#
+#     def update(self, position: np.ndarray) -> None:
+#         self.velocity = (self.friction * self.velocity +
+#                          (1 - self.friction) * (position - self.position))
+#         self.position = position
+
+
+# class ObjectTemplate:
+#     TEMPLATE_SIZE = (64, 64)
+#     UPDATE_DECAY = 0.7
+#
+#     def __init__(self, image: np.ndarray, box: BBox) -> None:
+#         self.template: np.ndarray = self.extract_resized_roi(image, box)
+#
+#     def update(self, image: np.ndarray, box: BBox) -> None:
+#         roi = self.extract_resized_roi(image, box)
+#         self.template = (self.template * (1 - self.UPDATE_DECAY) +
+#                          roi * self.UPDATE_DECAY)
+#
+#     def calc_dist(self, other: 'ObjectTemplate') -> float:
+#         # return 1 - ssim(self.template, other.template, multichannel=True)
+#         return distance.cosine(
+#             self.template.flatten(), other.template.flatten())
+#
+#     @staticmethod
+#     def extract_resized_roi(image: np.ndarray, box: BBox) -> np.ndarray:
+#         (x1, y1), (x2, y2) = box.top_left, box.bottom_right
+#
+#         x1 = np.clip(x1, 0, image.shape[1] - 1)
+#         y1 = np.clip(y1, 0, image.shape[0] - 1)
+#         x2 = np.clip(x2, 0, image.shape[1] - 1)
+#         y2 = np.clip(y2, 0, image.shape[0] - 1)
+#
+#         roi = image[y1:y2, x1:x2]
+#         roi = cv.resize(
+#             roi, ObjectTemplate.TEMPLATE_SIZE, interpolation=cv.INTER_AREA)
+#         return roi.astype(np.float)
 
 
 class ObjectTemplate:
@@ -30,6 +75,7 @@ class ObjectTemplate:
                          roi * self.UPDATE_DECAY)
     
     def calc_dist(self, other: 'ObjectTemplate') -> float:
+        # return 1 - ssim(self.template, other.template, multichannel=True)
         return distance.cosine(
             self.template.flatten(), other.template.flatten())
     
@@ -55,6 +101,7 @@ class Track:
         self._id: int = id_
         self.box: BBox = box
         self.template = ObjectTemplate(image, box)
+        self.velocity = VelocityModel(np.array(box.center))
         self.no_update_count = 0
     
     @staticmethod
@@ -70,6 +117,7 @@ class Track:
     def update(self, image: np.ndarray, box: BBox) -> None:
         self.box = box
         self.template.update(image, box)
+        self.velocity.update(np.array(box.center))
         self.no_update_count = 0
     
     def notify_no_update(self) -> None:
@@ -88,10 +136,17 @@ TracksT = Sequence[Track]
 CostEvalT = Callable[[Detection, Track], float]
 
 
+def draw_velocity(image: np.ndarray, track: Track) -> None:
+    velocity = track.velocity.velocity
+    cv.putText(
+        image, f'[{velocity[0]:.4f}, {velocity[1]:.4f}]', track.box.center,
+        cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv.LINE_AA)
+
+
 class TrackingByDetectionMultiTracker:
     def __init__(
             self, iou_dist_thresh: float = 0.7,
-            template_dist_thresh: float = 0.08, max_no_update_count: int = 20):
+            template_dist_thresh: float = 0.15, max_no_update_count: int = 30):
         assert 0 <= iou_dist_thresh <= 1
         assert 0 <= template_dist_thresh <= 1
         assert max_no_update_count > 0
@@ -130,7 +185,7 @@ class TrackingByDetectionMultiTracker:
         for detection in rem_detections:
             track = self._create_track(image, detection.box)
             tracked_detections.append(TrackedDetection(detection.box, track.id))
-        
+
         return tracked_detections
     
     @staticmethod
@@ -161,7 +216,7 @@ class TrackingByDetectionMultiTracker:
                     if cost_matrix_row == assigned_row:
                         assigned_col = col_ind[assignment_pos]
                         cost = cost_matrix[assigned_row, assigned_col]
-                        
+                        assignment_pos += 1
                         if cost < thresh:
                             box = detections[assigned_row].box
                             track = tracks[assigned_col]
@@ -170,7 +225,6 @@ class TrackingByDetectionMultiTracker:
                             assigned_tracks_pos.add(assigned_col)
                             tracked_detections.append(
                                 TrackedDetection(box, track.id))
-                            assignment_pos += 1
                             
                             continue
                 rem_detections.append(detection)

@@ -55,6 +55,10 @@ class BBox:
     def bottom_right(self) -> Tuple[int, int]:
         return self.x + self.width, self.y + self.height
     
+    @property
+    def center(self) -> Tuple[int, int]:
+        return self.x + self.width // 2, self.y + self.height // 2
+    
     def area(self) -> int:
         return self.width * self.height
     
