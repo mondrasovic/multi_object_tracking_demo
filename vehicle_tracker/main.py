@@ -35,23 +35,27 @@ def get_video_output_path(input_file_path: str) -> str:
 def main(input_file_path: str, config_file_path: str) -> int:
     with open(config_file_path, 'r') as json_file:
         config = json.load(json_file)
-        detector_config = config['detector']
-        tracker_config = config['tracker']
         
+        detector_config = config['detector']
+        min_box_area_ratio = detector_config.get('min_box_area_ratio')
+        box_scale = detector_config.get('box_scale')
         detector = VehicleDetector(
             detector_config['config_file_path'],
             detector_config['weights_file_path'],
             detector_config['labels_file_path'],
             score_thresh=detector_config['score_thresh'],
             nms_thresh=detector_config['nms_thresh'],
-            min_box_area_ratio=detector_config['min_box_area_ratio'],
+            min_box_area_ratio=min_box_area_ratio,
+            box_scale=box_scale,
             use_gpu=detector_config['use_gpu'])
+
+        tracker_config = config['tracker']
         tracker = TrackingByDetectionMultiTracker(
             tracker_config['config_file_path'],
             tracker_config['weights_file_path'],
-            tracker_config['iou_dist_thresh'],
-            tracker_config['emb_dist_thresh'],
-            tracker_config['max_no_update_count'])
+            iou_dist_thresh=tracker_config['iou_dist_thresh'],
+            emb_dist_thresh=tracker_config['emb_dist_thresh'],
+            max_no_update_count=tracker_config['max_no_update_count'])
     
     tracking_visualizer = TrackingVisualizer()
     

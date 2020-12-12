@@ -108,7 +108,7 @@ CostEvalT = Callable[[Detection, Track], float]
 
 class TrackingByDetectionMultiTracker:
     def __init__(
-            self, emb_config_file_path: str, emb_weights_file_path: str,
+            self, emb_config_file_path: str, emb_weights_file_path: str, *,
             iou_dist_thresh: float = 0.7, emb_dist_thresh: float = 0.2,
             max_no_update_count: int = 30):
         assert 0 <= iou_dist_thresh <= 1

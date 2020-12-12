@@ -36,14 +36,14 @@ class VehicleDetector(ObjectDetector):
             self, config_file_path: str, weights_file_path: str,
             labels_file_path: str, *, score_thresh: float = 0.5,
             nms_thresh: float = 0.3, min_box_area_ratio: Optional[float] = None,
-            use_gpu: bool = False) -> None:
+            box_scale: Optional[float] = None, use_gpu: bool = False) -> None:
         self.labels: Sequence[str] = pathlib.Path(
             labels_file_path).read_text().strip().split()
         self.valid_class_ids = set(
             i
             for i, label in enumerate(self.labels)
             if label in self.VALID_LABELS)
-        
+    
         self._net = cv.dnn.readNetFromDarknet(
             config_file_path, weights_file_path)
     
@@ -55,10 +55,11 @@ class VehicleDetector(ObjectDetector):
         if use_gpu:
             self._net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
             self._net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA)
-        
+    
         self.score_thresh: float = score_thresh
         self.nms_thresh: float = nms_thresh
         self.min_box_area_ratio: Optional[float] = min_box_area_ratio
+        self.box_scale: Optional[float] = box_scale
     
     def detect(self, image: np.ndarray) -> Sequence[Detection]:
         blob = cv.dnn.blobFromImage(
@@ -84,14 +85,14 @@ class VehicleDetector(ObjectDetector):
                 if score <= self.score_thresh:
                     continue
 
-                box = self.scale_frac_box_to_image_size(
+                box = self._scale_frac_box_to_image_size(
                     detection[0:4], width, height)
                 if self.min_box_area_ratio is not None:
                     area_ratio = (box[2] * box[3]) / float(width * height)
                     if area_ratio < self.min_box_area_ratio:
                         continue
                 
-                boxes.append(self.box_center_to_top_left(box))
+                boxes.append(self._box_center_to_top_left(box))
                 scores.append(score)
                 class_ids.append(class_id)
                 class_labels.append(self.labels[class_id])
@@ -102,31 +103,37 @@ class VehicleDetector(ObjectDetector):
         indices = cv.dnn.NMSBoxes(
             boxes, scores, self.score_thresh, self.nms_thresh).reshape(-1)
         
-        boxes = self.select_indices_from_nms(boxes, indices)
-        scores = self.select_indices_from_nms(scores, indices)
-        class_ids = self.select_indices_from_nms(class_ids, indices)
-        class_labels = self.select_indices_from_nms(class_labels, indices)
+        boxes = self._select_indices_from_nms(boxes, indices)
+        scores = self._select_indices_from_nms(scores, indices)
+        class_ids = self._select_indices_from_nms(class_ids, indices)
+        class_labels = self._select_indices_from_nms(class_labels, indices)
         
         detection_results = [
-            Detection(BBox(*box), score, class_id, class_label)
+            Detection(self._build_box(*box), score, class_id, class_label)
             for box, score, class_id, class_label in
             zip(boxes, scores, class_ids, class_labels)]
         
         return detection_results
     
     @staticmethod
-    def scale_frac_box_to_image_size(
+    def _scale_frac_box_to_image_size(
             box: np.ndarray, width: int, height: int) -> np.ndarray:
         return np.round(box[0:4] * np.array(
             (width, height, width, height))).astype('int')
     
     @staticmethod
-    def box_center_to_top_left(box: np.ndarray) -> Tuple[int, int, int, int]:
+    def _box_center_to_top_left(box: np.ndarray) -> Tuple[int, int, int, int]:
         x, y, w, h = box
         return (
             int(round(x - w / 2.0)), int(round(y - h / 2.0)), int(w), int(h))
     
     @staticmethod
-    def select_indices_from_nms(
+    def _select_indices_from_nms(
             arr: Sequence[Any], indices: np.ndarray) -> Sequence[Any]:
         return [arr[i] for i in indices]
+    
+    def _build_box(self, x: int, y: int, width: int, height: int) -> BBox:
+        bbox = BBox(x, y, width, height)
+        if self.box_scale is not None:
+            bbox = bbox.rescale_sides(self.box_scale, self.box_scale)
+        return bbox
