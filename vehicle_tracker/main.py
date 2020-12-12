@@ -44,6 +44,7 @@ def main(input_file_path: str, config_file_path: str) -> int:
             detector_config['labels_file_path'],
             score_thresh=detector_config['score_thresh'],
             nms_thresh=detector_config['nms_thresh'],
+            min_box_area_ratio=detector_config['min_box_area_ratio'],
             use_gpu=detector_config['use_gpu'])
         tracker = TrackingByDetectionMultiTracker(
             tracker_config['config_file_path'],

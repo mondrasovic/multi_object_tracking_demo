@@ -183,6 +183,7 @@ class TrackingByDetectionMultiTracker:
                         assigned_col = col_ind[assignment_pos]
                         cost = cost_matrix[assigned_row, assigned_col]
                         assignment_pos += 1
+                        
                         if cost < thresh:
                             box = detections[assigned_row].box
                             track = tracks[assigned_col]
