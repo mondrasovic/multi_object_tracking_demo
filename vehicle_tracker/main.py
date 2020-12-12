@@ -3,7 +3,9 @@
 
 # Author: Milan Ondrasovic <milan.ondrasovic@gmail.com>
 
+import json
 import click
+import pathlib
 
 import cv2 as cv
 import numpy as np
@@ -17,37 +19,32 @@ from visual import TrackingVisualizer
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
     # image = cv.flip(cv.flip(image, 1), 0)
-<<<<<<< HEAD
-    return cv.resize(image, None, fx=0.8, fy=0.8)
-=======
     return cv.resize(image, None, fx=0.6, fy=0.6)
->>>>>>> b224d369b2d4179818f4bf32c250031adc2d92a7
+
+
+def get_video_output_path(input_file_path: str) -> str:
+    input_path = pathlib.Path(input_file_path)
+    output_path = pathlib.Path('..') / f'{input_path.stem}_processed{input_path.suffix}'
+    return str(output_path)
 
 
 @click.command()
+@click.argument('input_file_path')
 @click.argument('config_file_path')
-@click.argument('weights_file_path')
-@click.argument('labels_file_path')
-@click.option(
-    '--input-file-path', '-i', default='',
-    help='input file name (if empty, default camera is used)')
-@click.option(
-    '--score-thresh', '-s', default=0.5, type=float,
-    help='detection score (confidence) threshold')
-@click.option(
-    '--nms-thresh', '-n', default=0.3, type=float,
-    help='Non-Maximum Suppression threshold')
-@click.option(
-    '--use-gpu', '-g', default=False, is_flag=True,
-    help='whether to use GPU or not')
-def main(
-        config_file_path: str, weights_file_path: str, labels_file_path: str,
-        input_file_path: str, score_thresh: float, nms_thresh: float,
-        use_gpu: bool) -> int:
-    detector = VehicleDetector(
-        config_file_path, weights_file_path, labels_file_path,
-        score_thresh=score_thresh, nms_thresh=nms_thresh, use_gpu=use_gpu)
-    tracker = TrackingByDetectionMultiTracker()
+def main(input_file_path: str, config_file_path: str) -> int:
+    with open(config_file_path, 'r') as json_file:
+        config = json.load(json_file)
+        detector_config = config['detector']
+        tracker_config = config['tracker']
+        
+        detector = VehicleDetector(
+            detector_config['config_file_path'], detector_config['weights_file_path'],
+            detector_config['labels_file_path'], score_thresh=detector_config['score_thresh'],
+            nms_thresh=detector_config['nms_thresh'], use_gpu=detector_config['use_gpu'])
+        tracker = TrackingByDetectionMultiTracker(
+            tracker_config['config_file_path'], tracker_config['weights_file_path'],
+            tracker_config['iou_dist_thresh'], tracker_config['emb_dist_thresh'],
+            tracker_config['max_no_update_count'])
     
     tracking_visualizer = TrackingVisualizer()
     
@@ -57,9 +54,10 @@ def main(
         capture = cv.VideoCapture(0)
     
     frame_rate = 25
-    output_video_file_path = '../video_output.mp4'
+    output_video_file_path = get_video_output_path(input_file_path)
     video_writer = skvideo.io.FFmpegWriter(
         output_video_file_path, outputdict={'-r': str(frame_rate)})
+    
     while capture.isOpened():
         ret, image = capture.read()
         if not ret:
@@ -70,9 +68,9 @@ def main(
         tracks = tracker.track(image, detections)
         tracking_visualizer.draw_tracks(image, tracks)
         
-        cv.imshow('Detections preview', image)
+        cv.imshow('Tracking preview', image)
         video_writer.writeFrame(cv.cvtColor(image, cv.COLOR_BGR2RGB))
-        key = cv.waitKey(1) & 0xff
+        key = cv.waitKey(0) & 0xff
         if key == ord('q'):
             video_writer.close()
             break
