@@ -93,10 +93,10 @@ class BBox:
             self, width_scale: float = 1., height_scale: float = 1.) -> 'BBox':
         assert (width_scale >= 0) and (height_scale >= 0)
     
-        x_diff = int(self.width * (width_scale - 1.) / 2)
-        y_diff = int(self.height * (height_scale - 1.) / 2)
+        x_diff = int(round(self.width * (width_scale - 1.) / 2))
+        y_diff = int(round(self.height * (height_scale - 1.) / 2))
     
         new_x, new_y = self.x - x_diff, self.y - y_diff
-        new_w, new_h = self.width + x_diff, self.height + y_diff
+        new_w, new_h = self.width + (2 * x_diff), self.height + (2 * y_diff)
     
         return BBox(new_x, new_y, new_w, new_h)
