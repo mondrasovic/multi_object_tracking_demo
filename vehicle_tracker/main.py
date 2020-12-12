@@ -24,7 +24,8 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
 def get_video_output_path(input_file_path: str) -> str:
     input_path = pathlib.Path(input_file_path)
-    output_path = pathlib.Path('..') / f'{input_path.stem}_processed{input_path.suffix}'
+    output_path = (pathlib.Path('..') /
+                   f'{input_path.stem}_processed{input_path.suffix}')
     return str(output_path)
 
 
@@ -38,12 +39,17 @@ def main(input_file_path: str, config_file_path: str) -> int:
         tracker_config = config['tracker']
         
         detector = VehicleDetector(
-            detector_config['config_file_path'], detector_config['weights_file_path'],
-            detector_config['labels_file_path'], score_thresh=detector_config['score_thresh'],
-            nms_thresh=detector_config['nms_thresh'], use_gpu=detector_config['use_gpu'])
+            detector_config['config_file_path'],
+            detector_config['weights_file_path'],
+            detector_config['labels_file_path'],
+            score_thresh=detector_config['score_thresh'],
+            nms_thresh=detector_config['nms_thresh'],
+            use_gpu=detector_config['use_gpu'])
         tracker = TrackingByDetectionMultiTracker(
-            tracker_config['config_file_path'], tracker_config['weights_file_path'],
-            tracker_config['iou_dist_thresh'], tracker_config['emb_dist_thresh'],
+            tracker_config['config_file_path'],
+            tracker_config['weights_file_path'],
+            tracker_config['iou_dist_thresh'],
+            tracker_config['emb_dist_thresh'],
             tracker_config['max_no_update_count'])
     
     tracking_visualizer = TrackingVisualizer()
@@ -70,7 +76,7 @@ def main(input_file_path: str, config_file_path: str) -> int:
         
         cv.imshow('Tracking preview', image)
         video_writer.writeFrame(cv.cvtColor(image, cv.COLOR_BGR2RGB))
-        key = cv.waitKey(0) & 0xff
+        key = cv.waitKey(1) & 0xff
         if key == ord('q'):
             video_writer.close()
             break

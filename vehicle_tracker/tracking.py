@@ -6,7 +6,7 @@
 import json
 import dataclasses
 
-from typing import Sequence, Tuple, Dict, Callable, List
+from typing import Sequence, Tuple, Dict, Callable, List, Iterable
 
 import cv2 as cv
 import numpy as np
@@ -25,14 +25,26 @@ class EmbeddingBuilder:
         with open(config_file_path, 'r') as json_file:
             json_content = json.load(json_file)
         
-        self._model: keras.models.Model = keras.models.model_from_json(json.dumps(json_content))
+        self._model: keras.models.Model = keras.models.model_from_json(
+            json.dumps(json_content))
         self._model.load_weights(weights_file_path)
     
     def build(self, image: np.ndarray, box: BBox) -> np.ndarray:
         roi = self.extract_resized_roi(image, box)
-        emb = self._get_embedding(roi)
+        emb = self._get_embedding(np.array([roi]))[0]
         return emb
-
+    
+    def build_batch(
+            self,
+            image_box_batch: Iterable[Tuple[np.ndarray, BBox]]) -> np.ndarray:
+        rois = np.array(
+            [self.extract_resized_roi(image, box)
+             for image, box in image_box_batch])
+        if len(rois) == 0:
+            return rois
+        emb_batch = self._get_embedding(rois)
+        return emb_batch
+    
     @staticmethod
     def extract_resized_roi(image: np.ndarray, box: BBox) -> np.ndarray:
         (x1, y1), (x2, y2) = box.top_left, box.bottom_right
@@ -47,15 +59,15 @@ class EmbeddingBuilder:
             roi, EmbeddingBuilder.INPUT_SIZE, interpolation=cv.INTER_LANCZOS4)
         return roi.astype(np.float)
     
-    def _get_embedding(self, image: np.ndarray) -> np.ndarray:
-        return self._model.predict(np.array([preprocess_input(image)]))[0]
+    def _get_embedding(self, data_batch: np.ndarray) -> np.ndarray:
+        return self._model.predict(preprocess_input(data_batch))
 
 
 class Track:
-    def __init__(self, id_: int, box: BBox, embedding: np.ndarray) -> None:
+    def __init__(self, id_: int, box: BBox, emb: np.ndarray) -> None:
         self._id: int = id_
         self.box: BBox = box
-        self.embedding: np.ndarray = embedding
+        self.emb: np.ndarray = emb
         self.no_update_count: int = 0
     
     @property
@@ -76,8 +88,8 @@ class TrackBuilder:
         self._track_id: int = 1
     
     def build(self, image: np.ndarray, box: BBox) -> Track:
-        embedding = self._emb_builder.build(image, box)
-        track = Track(self._track_id, box, embedding)
+        emb = self._emb_builder.build(image, box)
+        track = Track(self._track_id, box, emb)
         self._track_id += 1
         return track
 
@@ -119,14 +131,14 @@ class TrackingByDetectionMultiTracker:
         
         # First round. Assign detections according to the IoU distance.
         rem_detections, rem_tracks = self._assign_detections_to_tracks(
-            detections, tuple(self._tracks.values()), tracked_detections, self._iou_dist,
-            self.iou_dist_thresh)
+            detections, tuple(self._tracks.values()), tracked_detections,
+            self._iou_dist, self.iou_dist_thresh)
         
         # Second round. Assign detections according to the distance of
         # visual features (embeddings).
         rem_detections, rem_tracks = self._assign_detections_to_tracks(
-            rem_detections, rem_tracks, tracked_detections, self._emb_l2_dist(image, detections),
-            self.emb_dist_thresh)
+            rem_detections, rem_tracks, tracked_detections,
+            self._emb_l2_dist(image, detections), self.emb_dist_thresh)
         
         # Mark the remaining tracks as not updated. If no update has been
         # present in a specified number of iterations, then remove the track.
@@ -138,20 +150,21 @@ class TrackingByDetectionMultiTracker:
         # The remaining detections will be assigned to new tracks.
         for detection in rem_detections:
             track = self._track_builder.build(image, detection.box)
+            self._tracks[track.id] = track
             tracked_detections.append(TrackedDetection(detection.box, track.id))
 
         return tracked_detections
     
     @staticmethod
     def _assign_detections_to_tracks(
-            detections: DetectionsT, tracks: TracksT, tracked_detections: TrackedDetectionsT,
-            cost_eval: CostEvalT, thresh: float) -> Tuple[DetectionsT, TracksT]:
+            detections: DetectionsT, tracks: TracksT,
+            tracked_detections: TrackedDetectionsT, cost_eval: CostEvalT,
+            thresh: float) -> Tuple[DetectionsT, TracksT]:
         rem_detections = []
         assigned_tracks_pos = set()
         
         if detections:
             cost_matrix = []
-            
             for detection in detections:
                 cost_matrix.append(
                     [cost_eval(detection, track) for track in tracks])
@@ -191,12 +204,13 @@ class TrackingByDetectionMultiTracker:
     def _iou_dist(detection: Detection, track: Track) -> float:
         return 1 - detection.box.intersection_over_union(track.box)
     
-    def _emb_l2_dist(self, image: np.ndarray, detections: DetectionsT) -> CostEvalT:
-        emb_cache = {
-            detection: self._emb_builder.build(image, detection.box)
-            for detection in detections}
+    def _emb_l2_dist(
+            self, image: np.ndarray, detections: DetectionsT) -> CostEvalT:
+        emb_batch = self._emb_builder.build_batch(
+            ((image, detection.box) for detection in detections))
+        emb_cache = dict(zip(detections, emb_batch))
         
         def _cost_eval(detection: Detection, track: Track) -> float:
-            return np.linalg.norm(emb_cache[detection] - track.embedding)
+            return np.linalg.norm(emb_cache[detection] - track.emb)
         
         return _cost_eval
