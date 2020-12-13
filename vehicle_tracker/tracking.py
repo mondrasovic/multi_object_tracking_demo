@@ -59,17 +59,26 @@ class EmbeddingBuilder:
 
 
 class Track:
-    def __init__(self, id_: int, box: BBox, emb: np.ndarray) -> None:
+    EMB_UPDATE_PERIOD = 5
+    
+    def __init__(
+            self, id_: int, emb_builder: EmbeddingBuilder, image: np.ndarray,
+            box: BBox) -> None:
         self._id: int = id_
+        self.emb_builder: EmbeddingBuilder = emb_builder
+        self.emb: np.ndarray = self.emb_builder.build(image, box)
         self.box: BBox = box
-        self.emb: np.ndarray = emb
         self.no_update_count: int = 0
+        self.update_count: int = 0
     
     @property
     def id(self) -> int:
         return self._id
     
-    def update(self, box: BBox) -> None:
+    def update(self, image: np.ndarray, box: BBox) -> None:
+        self.update_count = (self.update_count + 1) % self.EMB_UPDATE_PERIOD
+        if self.update_count == 0:
+            self.emb = self.emb_builder.build(image, box)
         self.box = box
         self.no_update_count = 0
     
@@ -83,8 +92,7 @@ class TrackBuilder:
         self._track_id: int = 1
     
     def build(self, image: np.ndarray, box: BBox) -> Track:
-        emb = self._emb_builder.build(image, box)
-        track = Track(self._track_id, box, emb)
+        track = Track(self._track_id, self._emb_builder, image, box)
         self._track_id += 1
         return track
 
@@ -127,14 +135,14 @@ class TrackingByDetectionMultiTracker:
         
         # First round. Assign detections according to the IoU distance.
         rem_detections, rem_tracks = self._assign_detections_to_tracks(
-            detections, tuple(self._tracks.values()), tracked_detections,
+            image, detections, tuple(self._tracks.values()), tracked_detections,
             self._iou_dist, self.iou_dist_thresh,
-            lambda t: t.no_update_count < 5)
+            lambda t: t.no_update_count < 10)
         
         # Second round. Assign detections according to the distance of
         # visual features (embeddings).
         rem_detections, rem_tracks = self._assign_detections_to_tracks(
-            rem_detections, rem_tracks, tracked_detections,
+            image, rem_detections, rem_tracks, tracked_detections,
             self._emb_l2_dist(image, detections), self.emb_dist_thresh)
         
         # Mark the remaining tracks as not updated. If no update has been
@@ -154,7 +162,7 @@ class TrackingByDetectionMultiTracker:
     
     @staticmethod
     def _assign_detections_to_tracks(
-            detections: DetectionsT, tracks: TracksT,
+            image: np.ndarray, detections: DetectionsT, tracks: TracksT,
             tracked_detections: TrackedDetectionsT, cost_eval: CostEvalT,
             thresh: float,
             track_predicate: TrackPredT = lambda t: True) ->\
@@ -186,9 +194,9 @@ class TrackingByDetectionMultiTracker:
                         
                         if cost < thresh:
                             box = detections[assigned_row].box
-                            track = valid_tracks[assigned_col]
+                            track: Track = valid_tracks[assigned_col]
                             
-                            track.update(box)
+                            track.update(image, box)
                             assigned_tracks_pos.add(assigned_col)
                             tracked_detections.append(
                                 TrackedDetection(box, track.id))
