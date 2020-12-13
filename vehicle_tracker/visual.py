@@ -11,7 +11,6 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 
-from detection import Detection
 from tracking import TrackedDetection
 
 ColorT = Tuple[int, int, int]
@@ -46,28 +45,6 @@ def labeled_rectangle(
         image, label, text_start_point, font_face, font_scale, (255, 255, 255),
         max(1, font_thickness - 2), cv.LINE_AA)
     cv.rectangle(image, start_point, end_point, rect_color, 2, cv.LINE_AA)
-
-
-class DetectionVisualizer:
-    def __init__(self, class_ids: Sequence[int]) -> None:
-        self.colors: Dict[int, ColorT] = {
-            class_id: (0, 255, 0) for class_id in class_ids}
-    
-    def draw_detections(
-            self, image: np.ndarray,
-            detections: Sequence[Detection]) -> None:
-        for detection in detections:
-            color = tuple(self.colors[detection.class_id])
-            top_left = detection.box.top_left
-            cv.rectangle(
-                image, top_left, detection.box.bottom_right, color=color,
-                thickness=3, lineType=cv.LINE_AA)
-            
-            text = f'{detection.class_label}: {detection.score:.4f}'
-            cv.putText(
-                image, text, (top_left[0], top_left[1] - 5),
-                fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=color,
-                thickness=2, lineType=cv.LINE_AA)
 
 
 class TrackingVisualizer:

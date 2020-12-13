@@ -37,6 +37,7 @@ def main(input_file_path: str, config_file_path: str) -> int:
     with open(config_file_path, 'r') as json_file:
         config = json.load(json_file)
     
+    
     detector_config = config['detector']
     min_box_area_ratio = detector_config.get('min_box_area_ratio')
     box_scale = detector_config.get('box_scale')
@@ -58,10 +59,9 @@ def main(input_file_path: str, config_file_path: str) -> int:
         emb_dist_thresh=tracker_config['emb_dist_thresh'],
         max_no_update_count=tracker_config['max_no_update_count'])
     
-    n_colors = 10
-    if 'visualizer' in config:
-        visualizer_config = config['visualizer']
-        n_colors = visualizer_config.get('colors_number', n_colors)
+    n_colors = config.get('colors_number', 10)
+    show_preview = config.get('show_preview', True)
+    
     tracking_visualizer = TrackingVisualizer(n_colors)
     
     if input_file_path:
@@ -83,14 +83,15 @@ def main(input_file_path: str, config_file_path: str) -> int:
         detections = detector.detect(image)
         tracks = tracker.track(image, detections)
         tracking_visualizer.draw_tracks(image, tracks)
-        
-        cv.imshow('Tracking preview', image)
+
         video_writer.writeFrame(cv.cvtColor(image, cv.COLOR_BGR2RGB))
-        key = cv.waitKey(1) & 0xff
-        if key == ord('q'):
-            video_writer.close()
-            break
+        if show_preview:
+            cv.imshow('Tracking preview', image)
+            key = cv.waitKey(1) & 0xff
+            if key == ord('q'):
+                break
     
+    video_writer.close()
     capture.release()
     cv.destroyAllWindows()
     
