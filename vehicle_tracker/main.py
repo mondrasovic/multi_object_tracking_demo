@@ -58,7 +58,11 @@ def main(input_file_path: str, config_file_path: str) -> int:
         emb_dist_thresh=tracker_config['emb_dist_thresh'],
         max_no_update_count=tracker_config['max_no_update_count'])
     
-    tracking_visualizer = TrackingVisualizer(10)
+    n_colors = 10
+    if 'visualizer' in config:
+        visualizer_config = config['visualizer']
+        n_colors = visualizer_config.get('colors_number', n_colors)
+    tracking_visualizer = TrackingVisualizer(n_colors)
     
     if input_file_path:
         capture = cv.VideoCapture(input_file_path)

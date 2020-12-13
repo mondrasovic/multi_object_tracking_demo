@@ -4,7 +4,7 @@
     "weights_file_path": "../model/yolov3.weights",
     "labels_file_path": "../model/coco.names",
     "score_thresh": 0.5,
-    "nms_thresh": 0.3,
+    "nms_thresh": 0.25,
     "min_box_area_ratio": 0.002,
     "box_scale": 1.1,
     "use_gpu": false
@@ -12,8 +12,11 @@
   "tracker": {
     "config_file_path": "../model/embedding_model_layout.json",
     "weights_file_path": "../model/embedding_model_weights.h5",
-    "iou_dist_thresh": 0.7,
-    "emb_dist_thresh": 0.5,
-    "max_no_update_count": 30
+    "iou_dist_thresh": 0.5,
+    "emb_dist_thresh": 0.85,
+    "max_no_update_count": 20
+  },
+  "visualizer": {
+    "colors_number": 10
   }
 }

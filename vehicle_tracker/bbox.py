@@ -100,3 +100,18 @@ class BBox:
         new_w, new_h = self.width + (2 * x_diff), self.height + (2 * y_diff)
     
         return BBox(new_x, new_y, new_w, new_h)
+    
+    def fit_image(self, image_width: int, image_height: int) -> 'BBox':
+        (x1, y1), (x2, y2) = self.top_left, self.bottom_right
+    
+        x1 = self.clip(x1, 0, image_width - 1)
+        y1 = self.clip(y1, 0, image_height - 1)
+        x2 = self.clip(x2, 0, image_width - 1)
+        y2 = self.clip(y2, 0, image_height - 1)
+        x, y, w, h = x1, y1, x2 - x1, y2 - y1
+        
+        return BBox(x, y, w, h)
+    
+    @staticmethod
+    def clip(val, a, b):
+        return max(a, min(val, b))

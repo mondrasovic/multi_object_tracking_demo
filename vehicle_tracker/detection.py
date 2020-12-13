@@ -109,7 +109,9 @@ class VehicleDetector(ObjectDetector):
         class_labels = self._select_indices_from_nms(class_labels, indices)
         
         detection_results = [
-            Detection(self._build_box(*box), score, class_id, class_label)
+            Detection(
+                self._build_box(*box, image_width=width, image_height=height),
+                score, class_id, class_label)
             for box, score, class_id, class_label in
             zip(boxes, scores, class_ids, class_labels)]
         
@@ -132,8 +134,11 @@ class VehicleDetector(ObjectDetector):
             arr: Sequence[Any], indices: np.ndarray) -> Sequence[Any]:
         return [arr[i] for i in indices]
     
-    def _build_box(self, x: int, y: int, width: int, height: int) -> BBox:
+    def _build_box(
+            self, x: int, y: int, width: int, height: int, image_width: int,
+            image_height: int) -> BBox:
         bbox = BBox(x, y, width, height)
         if self.box_scale is not None:
             bbox = bbox.rescale_sides(self.box_scale, self.box_scale)
+        bbox = bbox.fit_image(image_width, image_height)
         return bbox

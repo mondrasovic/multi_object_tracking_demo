@@ -14,6 +14,6 @@
     "weights_file_path": "../model/embedding_model_weights.h5",
     "iou_dist_thresh": 0.7,
     "emb_dist_thresh": 0.5,
-    "max_no_update_count": 30
+    "max_no_update_count": 15
   }
 }

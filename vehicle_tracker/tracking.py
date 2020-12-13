@@ -49,11 +49,6 @@ class EmbeddingBuilder:
     def extract_resized_roi(image: np.ndarray, box: BBox) -> np.ndarray:
         (x1, y1), (x2, y2) = box.top_left, box.bottom_right
     
-        x1 = np.clip(x1, 0, image.shape[1] - 1)
-        y1 = np.clip(y1, 0, image.shape[0] - 1)
-        x2 = np.clip(x2, 0, image.shape[1] - 1)
-        y2 = np.clip(y2, 0, image.shape[0] - 1)
-    
         roi = image[y1:y2, x1:x2]
         roi = cv.resize(
             roi, EmbeddingBuilder.INPUT_SIZE, interpolation=cv.INTER_LANCZOS4)
@@ -104,6 +99,7 @@ DetectionsT = Sequence[Detection]
 TrackedDetectionsT = List[TrackedDetection]
 TracksT = Sequence[Track]
 CostEvalT = Callable[[Detection, Track], float]
+TrackPredT = Callable[[Track], bool]
 
 
 class TrackingByDetectionMultiTracker:
@@ -132,7 +128,8 @@ class TrackingByDetectionMultiTracker:
         # First round. Assign detections according to the IoU distance.
         rem_detections, rem_tracks = self._assign_detections_to_tracks(
             detections, tuple(self._tracks.values()), tracked_detections,
-            self._iou_dist, self.iou_dist_thresh)
+            self._iou_dist, self.iou_dist_thresh,
+            lambda t: t.no_update_count < 5)
         
         # Second round. Assign detections according to the distance of
         # visual features (embeddings).
@@ -159,18 +156,21 @@ class TrackingByDetectionMultiTracker:
     def _assign_detections_to_tracks(
             detections: DetectionsT, tracks: TracksT,
             tracked_detections: TrackedDetectionsT, cost_eval: CostEvalT,
-            thresh: float) -> Tuple[DetectionsT, TracksT]:
+            thresh: float,
+            track_predicate: TrackPredT = lambda t: True) ->\
+            Tuple[DetectionsT, TracksT]:
         rem_detections = []
         assigned_tracks_pos = set()
+        valid_tracks = tuple(filter(track_predicate, tracks))
         
         if detections:
             cost_matrix = []
             for detection in detections:
                 cost_matrix.append(
-                    [cost_eval(detection, track) for track in tracks])
+                    [cost_eval(detection, track) for track in valid_tracks])
             
             row_ind = col_ind = []
-            if tracks:
+            if valid_tracks:
                 cost_matrix = np.array(cost_matrix)
                 row_ind, col_ind = optimize.linear_sum_assignment(cost_matrix)
             
@@ -186,7 +186,7 @@ class TrackingByDetectionMultiTracker:
                         
                         if cost < thresh:
                             box = detections[assigned_row].box
-                            track = tracks[assigned_col]
+                            track = valid_tracks[assigned_col]
                             
                             track.update(box)
                             assigned_tracks_pos.add(assigned_col)
@@ -196,8 +196,8 @@ class TrackingByDetectionMultiTracker:
                             continue
                 rem_detections.append(detection)
         
-        rem_tracks_pos = set(range(len(tracks))) - assigned_tracks_pos
-        rem_tracks = [tracks[i] for i in rem_tracks_pos]
+        rem_tracks_pos = set(range(len(valid_tracks))) - assigned_tracks_pos
+        rem_tracks = [valid_tracks[i] for i in rem_tracks_pos]
         
         return rem_detections, rem_tracks
     
