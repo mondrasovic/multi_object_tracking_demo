@@ -77,7 +77,7 @@ class Track:
     
     def update(self, image: np.ndarray, box: BBox) -> None:
         self.update_count = (self.update_count + 1) % self.EMB_UPDATE_PERIOD
-        if self.update_count == 0:
+        if self.update_count < 0:
             self.emb = self.emb_builder.build(image, box)
         self.box = box
         self.no_update_count = 0
