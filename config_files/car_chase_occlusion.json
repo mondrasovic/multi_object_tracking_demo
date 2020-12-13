@@ -5,7 +5,7 @@
     "labels_file_path": "../model/coco.names",
     "score_thresh": 0.5,
     "nms_thresh": 0.25,
-    "min_box_area_ratio": 0.002,
+    "min_box_area_ratio": 0.004,
     "box_scale": 1.1,
     "use_gpu": false
   },
@@ -16,7 +16,6 @@
     "emb_dist_thresh": 0.7,
     "max_no_update_count": 20
   },
-  "visualizer": {
-    "colors_number": 10
-  }
+  "colors_number": 20,
+  "show_preview": true
 }
