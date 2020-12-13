@@ -5,7 +5,7 @@
     "labels_file_path": "../model/coco.names",
     "score_thresh": 0.5,
     "nms_thresh": 0.25,
-    "min_box_area_ratio": 0.004,
+    "min_box_area_ratio": 0.002,
     "box_scale": 1.1,
     "use_gpu": false
   },
